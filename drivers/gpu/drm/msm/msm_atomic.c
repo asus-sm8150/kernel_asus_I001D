@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (C) 2014 Red Hat
  * Author: Rob Clark <robdclark@gmail.com>
  *
@@ -26,6 +26,11 @@
 #include "sde_trace.h"
 
 #define MULTIPLE_CONN_DETECTED(x) (x > 1)
+
+/* ASUS BSP Display +++ */
+extern int lastFps;
+extern bool changeFps;
+/* ASUS BSP Display --- */
 
 struct msm_commit {
 	struct drm_device *dev;
@@ -433,6 +438,7 @@ static void msm_atomic_helper_commit_modeset_enables(struct drm_device *dev,
 	int bridge_enable_count = 0;
 	int i, blank;
 	bool splash = false;
+	int type = 0; // ASUS BSP Display +++
 
 	SDE_ATRACE_BEGIN("msm_enable");
 	for_each_oldnew_crtc_in_state(old_state, crtc, old_crtc_state,
@@ -476,6 +482,20 @@ static void msm_atomic_helper_commit_modeset_enables(struct drm_device *dev,
 		if (!new_conn_state->best_encoder)
 			continue;
 
+		/* ASUS BSP Display +++ */
+		if (changeFps) {
+			if (lastFps >= 60 && lastFps < 90)
+				type = 2;
+			else if (lastFps >= 90 && lastFps < 120)
+				type = 1;
+			else
+				type = 0;
+
+			drm_bridge_asusFps(connector->state->best_encoder->bridge, type);
+			changeFps = false;
+		}
+		/* ASUS BSP Display --- */
+		
 		if (!new_conn_state->crtc->state->active ||
 				!drm_atomic_crtc_needs_modeset(
 					new_conn_state->crtc->state))
@@ -760,6 +780,16 @@ int msm_atomic_commit(struct drm_device *dev,
 			drm_atomic_set_fence_for_plane(new_plane_state, fence);
 		}
 		c->plane_mask |= (1 << drm_plane_index(plane));
+	}
+
+	/* Protection for prepare_fence callback */
+retry:
+	ret = drm_modeset_lock(&state->dev->mode_config.connection_mutex,
+		state->acquire_ctx);
+
+	if (ret == -EDEADLK) {
+		drm_modeset_backoff(state->acquire_ctx);
+		goto retry;
 	}
 
 	/*
