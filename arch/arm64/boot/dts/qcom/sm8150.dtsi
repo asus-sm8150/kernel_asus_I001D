@@ -767,11 +767,6 @@
 			size = <0x0 0x2800000>;
 			linux,cma-default;
 		};
-		asus_debug_mem: asus_debug_resion@0{
-			compatible = "removed-dma-poll";
-			no-map;
-			reg = <0x0 0xA0000000 0x0 0x00300000>;
-		};
 	};
 
 	vendor: vendor {
